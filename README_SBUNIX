@@ -1,0 +1,151 @@
+                                                         CSE 506
+                                                          SBUnix
+------------------------------------------------------------------------------------------------------------------
+Project team ::
+1.) Mrinal Priyadarshi (109281632)
+2.) Anurag Chaudhary (109295529)
+3.) Shashank Gupta    (109079897)
+4.) Vinesh Roshan Karunakaran (109335836)
+
+References ::
+1.)osdevwiki
+2.)halen os
+3.)xv6 
+4.)Intel Manuals
+
+Have also discussed my ideas and some doubts about my way of implementation to YOMGMING SHEN and SAMEER GUPTA.
+In Networks I have taken help from Prof. Porter Lab Manuals.
+
+ 
+Tasks done :: Preemtive OS + FileSystem + Networks (Transmission)
+
+Features ::
+1.) Warm up:: Kernel Print as stated with all options (with all mentioned supports)
+2.) Warmup : Write to console done
+3.) Warmup :: Timer interrupts with Requirements
+4.) Warmup :: Keyboard interrupts with display
+5.) Virtual Memory + Paging + Ring 0-Ring 3
+6)  Auto Growing Stack and SEGV handling
+7.) Tarfs System calls:: open, read, close, opendir, readdir, closedir
+8.) Read() and write system calls 
+9.)  ls, ps ,sleep
+10.) cd, exec ,pwd ,getpid()
+11.) malloc, fork , exec , wait waitpid, exit ,getpid
+12.) sleep
+13.) printf, scanf
+
+14.) FileSystems ::  AHCI initialization 
+                                fread, fopen, fclose, 
+                                opendir, readdir, closedir
+                                 seek, write, mmap
+
+15.) Networks ::     E1000 initialization
+                               Transmission of packet
+
+Attached in make submit ::
+1.) hdd.img
+2.) superblock binary
+3.) README - SBUNIX
+
+
+
+
+--------------------------------------------------------------------------------------------------------------------
+                                           VFS LAYER FUNCTIONS
+
+FILE SYSTEMS (HipHopFS) AND TARFS::
+
+I am considering “/hiphop/" as my mount point for file system. So for storing files in file system attach full path. Suppose you want to make file “a.txt” then you should give fopen(“/hiphop/a.txt”).
+
+and suppose you want to create a directory say “A” , you can do make_dir_vfs(“/hiphop/A”).
+
+Similarly should be done while using fopen and open_dir
+
+File Functions ::
+1.) struct file *fopen(char *filename_full_path);
+2.) int fclose(struct file *fd);
+3.) int fseek(struct file *fd, int offset, int whence);
+4.) int fwrite(struct file *fd, char *buf,int size);
+5.) uint32_t fread(struct file *fd, char *buf,uint32_t size);
+
+Note :: Fseek sets the proper offset in fd which fread and and fwrite uses to perform accordingly. Fopen creates a new file if file does not exist
+
+Directory Functions ::
+struct file *opendir(char * name);
+uint64_t read_dir_ls(struct file * dir,char *buf,int size);
+int closedir(struct file *dirp);
+int make_dir_vfs(char *name);
+
+To make a new directory use “make_dir_vfs:
+use opendir to open an existing directory otherwise it will return 0
+
+read_dir_ls → reads the directory whose directory descriptor is passed in a buffer with comma separation
+
+-----------------------------------------------------------------------------------------------------------------
+Attaching a new hard disk and formatting for HipHop file systems ::
+
+steps ::
+1.) rm hdd.img
+2.) qemu-img create -f raw hdd.img 20M
+3.) dd if=superblock of=hdd.img seek=1 conv=notrunc
+4.) qemu-system-x86_64 -curses -cdrom $USER.iso -net nic -net user,hostfwd=tcp::10080-:80 -net user,hostfwd=tcp::10023-:23 -drive id=disk,file=hdd.img,if=none -device ahci,id=ahci -device ide-drive,drive=disk,bus=ahci.0 -gdb tcp::1234
+
+Through this I am creating  a binary “superblock” ::
+---------------------------------------------------------------------------------------------------
+#include<stdlib.h>
+#include<stdio.h>
+
+typedef struct {
+    char fs_type[10];
+    int size;
+    int magic_no;
+    int inode_start_sector;
+    int data_start_sector;
+    int free_inode_block[4];
+    int free_data_block[1272];
+} superblock;
+
+int main()
+{
+    superblock f;
+    f.fs_type[0] = 'H';
+    f.fs_type[1] = 'i';
+    f.fs_type[2] = 'p';
+    f.fs_type[3] = 'H';
+    f.fs_type[4] = 'o';
+    f.fs_type[5] = 'p';
+    f.fs_type[6] = 'F';
+    f.fs_type[7] = 'F';
+    f.fs_type[8] = '\0';
+    f.size = 20971520;
+    f.magic_no = 2014;
+    f.inode_start_sector = 23;
+    f.data_start_sector = 191;
+    f.free_inode_block[0] = 0;
+    f.free_inode_block[1] = 0;
+    f.free_inode_block[2] = 0;
+    f.free_inode_block[3] = 0;
+    int i ;
+    for(i = 0 ; i < 1272 ; i++)
+    {
+        f.free_data_block[i] = 0;
+    }
+
+   FILE * fp;
+
+/*   fp = fopen ("superblock", "w+");
+   fwrite(&f, sizeof(superblock), 1, fp);
+
+   fclose(fp);
+  */
+   superblock rs;
+   fp = fopen ("superblock", "r");
+   fread(&rs, sizeof(superblock), 1, fp);
+
+   fclose(fp);
+   printf("\n%d", rs.size);
+
+}
+----------------------------------------------------------------------------------------------------------
+
+

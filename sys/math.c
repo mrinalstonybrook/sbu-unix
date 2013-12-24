@@ -1,0 +1,112 @@
+#include <defs.h>
+#include <math.h>
+
+int strcmp(char *s1, char *s2)
+{
+       while (*s1 == *s2++) {
+          if (*s1++ == 0){ 
+               return (0);
+                 }
+            }
+        return (*(unsigned char *) s1 - *(unsigned char *) --s2);
+}
+
+int strlen(const char *s) {
+	int n;
+
+	for (n = 0; *s != '\0'; s++)
+		n++;
+	return n;
+}
+
+
+
+int pow(int x, int y)
+{
+      if( y == 0)
+                return 1;
+          else if (y%2 == 0)
+                    return pow(x, y/2)*pow(x, y/2);
+              else
+                        return x*pow(x, y/2)*pow(x, y/2);
+               
+}
+
+int atoi(char *str)
+{
+  int res = 0; // Initialize result
+  int i = 0;
+
+  // Iterate through all characters of input string and update result
+  for (i = 0; str[i] != '\0'; ++i)
+    res = res*10 + str[i] - '0';
+ 
+  // return result.
+  return res;
+}
+
+int getSize(char *p) 
+{
+   int k = 0;
+    while (*p) {
+       k = (k<<3)+(k<<1)+(*p)-'0';
+        p++;
+         }
+
+     int decimal=0, i=0, rem; 
+      while (k!=0) 
+         { 
+             rem = k%10; 
+               k/=10; 
+                 decimal += rem*pow(8,i); 
+                   ++i; 
+                    } 
+       return decimal; 
+}
+
+char *
+strcpy(char *dst, const char *src) {
+	char *ret;
+
+	ret = dst;
+	while ((*dst++ = *src++) != '\0')
+		/* do nothing */;
+        *dst='\0';
+	return ret;
+}
+
+
+char *
+strncpy(char *dst, const char *src, size_t size) {
+	size_t i;
+	char *ret;
+
+	ret = dst;
+	for (i = 0; i < size; i++) {
+		*dst++ = *src;
+		// If strlen(src) < size, null-pad 'dst' out to 'size' chars
+		if (*src != '\0')
+			src++;
+	}
+	return ret;
+}
+
+int matchString( char *s , char *t){
+
+  int ret = 0;
+
+  while (!(ret = *(unsigned char *) s - *(unsigned char *) t) && *t){
+    ++s;
+    ++t;
+  }
+
+  if (ret < 0){
+    ret = -1;
+  }
+  else if (ret > 0){
+    ret = 1 ;
+  }
+
+  return ret;
+
+}

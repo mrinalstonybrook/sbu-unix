@@ -1,0 +1,21 @@
+#include<sys/vfs.h>
+#include<sys/tarfs.h>
+
+dir *opendir(char * name){
+   return open_dir_tarfs(name);
+}
+dirent *readdir(dir *dirp){
+   return read_dir_tarfs(dirp);
+}
+int closedir(dir *dirp){
+    return close_dir_tarfs(dirp);
+}
+uint64_t fopen(char *path, int flag){
+    return open_file_tarfs(path);
+}
+int fread(uint64_t addr, void *buf, int nbytes, int offset){
+    return read_file_tarfs(addr, buf, nbytes, 0);
+}
+int fclose(uint64_t filedesc){
+    return close_file_tarfs(filedesc);
+}

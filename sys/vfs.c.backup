@@ -1,0 +1,213 @@
+#include<defs.h>
+#include<stdio.h>
+#include<my_lib.h>
+#include<math.h>
+
+#include<syscall.h>
+#include<sys/vfs.h>
+#include<syscall_dictionary.h>
+
+char mount_fs[10]="/hiphop/";
+
+dir vfs_dir;
+file vfs_fd;
+
+void init_desc(){
+	int i=0;
+	vfs_dir.address_tarfs_loc=0x0;
+	vfs_fd.address_tarfs_loc=0x0;
+
+	vfs_dir.inode_num=0;
+	vfs_fd.inode_num=0;
+
+	vfs_dir.location=DEFAULT_LOC;
+	vfs_fd.location=DEFAULT_LOC;
+
+	vfs_dir.perm=0;
+	vfs_fd.perm=0;
+
+	vfs_dir.size=0;
+	vfs_fd.size=0;
+
+	for(i=0; i<10;i++){
+		vfs_dir.sector_loc[i]=0;
+		vfs_fd.sector_loc[i]=0;
+	}
+
+	vfs_dir.offset=0;
+	vfs_fd.offset=0;
+
+	vfs_dir.next=0;
+	vfs_fd.next=0;
+
+	vfs_dir.tarfs_table_index=0;
+	vfs_fd.tarfs_table_index=0;
+
+	vfs_dir.type=DEFAULT_TYPE;
+	vfs_fd.type=DEFAULT_TYPE;
+
+	vfs_dir.filename[0]='\0';
+	vfs_fd.filename[0]='\0';
+}
+
+/***************FILESYSTEMS + TARFS *************************/
+
+dir *opendir(char * name){
+	init_desc();
+	//char *tmp;
+	uint64_t name_addr=(uint64_t)name;
+	uint64_t dir_addr;
+	dir_addr=(uint64_t)&vfs_dir;
+
+	//char mount_fs[10]="/hiphop/";
+	if((strncmp(name, mount_fs, strlen(mount_fs))) == 0 ){
+		printf("\n ITS IN FILE SYSTEM");
+	//	tmp=name+7;
+	//	name_addr=(uint64_t)tmp;
+		__syscall2(FS_OPEN_DIR,name_addr,dir_addr);
+		goto error;
+	}
+	__syscall2(TARFS_OPEN_DIR,name_addr,dir_addr);
+
+error:
+	if(dir_addr == NULL)
+		return NULL;
+	return &vfs_dir;
+
+}
+
+int readdir_ls(dir *dirp){
+	uint64_t dir_desc_addr=(uint64_t)dirp;
+	uint64_t return_value=777;
+
+	if(dirp==NULL){
+		printf("\n You are passing NULL directory descriptor");
+		return 0;
+	}
+	if((dirp->tarfs_table_index)<0 || (dirp->tarfs_table_index)>998){
+		printf("\n Directory does not exist");
+		return 0;
+	}
+	if(strlen(dirp->filename)==0){
+		printf("\n No Directory name mentioned");
+		return 0;
+	}
+
+	if((strncmp(dirp->filename, mount_fs, strlen(mount_fs))) == 0 ){
+		printf("\n ITS IN FILE SYSTEM");
+		__syscall2(FS_READ_DIR_LS,dir_desc_addr,(uint64_t)&return_value);
+		goto error;
+	}
+
+
+	__syscall2(TARFS_READ_DIR_LS,dir_desc_addr,(uint64_t)&return_value);
+
+error:
+	if(return_value==0)
+		printf("\n Directory Empty");
+	if(return_value==777)
+		printf("\n System call not working");
+	return return_value;
+}
+
+
+int closedir(dir *dirp){
+// free memory allocated to address coming at dirp
+//*(dirp)=(dir *)NULL;
+//return 1 on success
+//return  0 on failure
+return 1;
+}
+
+
+
+file *fopen(char *filename_full_path){
+
+	init_desc();
+	//char *tmp;
+	uint64_t name_addr=(uint64_t)filename_full_path;
+	uint64_t file_addr;
+	file_addr=(uint64_t)&vfs_fd;
+
+	if((strncmp(filename_full_path, mount_fs, strlen(mount_fs))) == 0 ){
+		printf("\n ITS IN FILE SYSTEM");
+	//	tmp=filename_full_path+7;
+	//	name_addr=(uint64_t)tmp;
+		__syscall2(FS_OPEN_FILE,name_addr,file_addr);
+		goto error;
+	}
+
+	__syscall2(TARFS_OPEN_FILE,name_addr,file_addr);
+
+error:
+	if(file_addr == NULL)
+		return NULL;
+	return &vfs_fd;
+}
+
+uint32_t fread(file *fd, char *buf,uint32_t size){
+	uint64_t file_desc=(uint64_t)fd;
+	uint64_t buf_addr=(uint64_t)buf;
+	uint64_t size_val=(uint64_t)size;
+	uint64_t return_val=0;
+
+	if(fd->location == FS_LOC)
+		__syscall4(FS_READ_FILE,file_desc,buf_addr,(uint64_t)&size_val,(uint64_t)&return_val);
+	else if(fd->location == TARFS_LOC)
+		__syscall4(TARFS_READ_FILE,file_desc,buf_addr,(uint64_t)&size_val,(uint64_t)&return_val);
+	else
+		printf("\n Location not Present");
+
+	return (*(uint32_t *)&return_val);
+}
+
+int fseek(file *fd, int offset, int whence){
+	if(fd == NULL)
+		return 0;
+	int new_pos = offset + whence;
+	if(new_pos < 0 || fd->size < new_pos)
+		return 0;
+	fd->offset = offset + whence;
+	return 1;
+}
+
+int fwrite(file *fd, char *buf,int size){
+
+	uint64_t file_desc=(uint64_t)fd;
+	uint64_t buf_addr=(uint64_t)buf;
+	uint64_t size_val=(uint64_t)size;
+	uint64_t return_val=0;
+
+	if(fd->location == FS_LOC)
+		__syscall4(FS_WRITE_FILE,file_desc,buf_addr,(uint64_t)&size_val,(uint64_t)&return_val);
+	else if(fd->location == TARFS_LOC){
+		printf("\nNo write for tarfs Location");
+		__syscall4(TARFS_READ_FILE,file_desc,buf_addr,(uint64_t)&size_val,(uint64_t)&return_val);
+	}
+	else
+		printf("\n Location not Present");
+
+	return (*(uint32_t *)&return_val);
+}
+
+int fclose(file *fd){
+	// free memory allocated to address coming at fd
+	//*fd=NULL;
+	//return 1 on success
+	//return  0 on failure
+	return 1;
+}
+
+int make_dir_vfs(char *name){
+	uint64_t name_addr=(uint64_t)name;
+	uint64_t return_val=0;
+	if((strncmp(name, mount_fs, strlen(mount_fs))) == 0 ){
+		printf("\n ITS IN FILE SYSTEM");
+		__syscall2(MAKE_DIR,name_addr,(uint64_t)&return_val);
+	}
+	return (*(uint32_t *)&return_val);
+}
+
+/**********************************************************/
+
+

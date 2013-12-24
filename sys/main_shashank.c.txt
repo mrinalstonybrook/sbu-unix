@@ -1,0 +1,183 @@
+#include <defs.h>
+#include <stdio.h>
+#include <sys/gdt.h>
+#include <pagetab.h>
+#include <sys/idt.h>
+#include <sys/pic.h>
+#include <sys/kbd.h>
+#include <sys/scancodes.h>
+#include <sys/isr.h>
+#include <task.h>
+#include <tarfs.h>
+#include <my_lib.h>
+#include <syscall.h>
+
+#include <sys/pci.h>
+#include <sys/ahci.h>
+#include <pmap.h>
+#include <mm.h>
+#include <math.h>
+#include <procsnip.h>
+
+uint64_t ahci_virt_addr1;
+uint64_t ahci_virt_addr2;
+uint64_t *pages_for_ahci_start;
+
+void* kernelbase;
+void* kernelfree;
+
+//void _x86_64_asm_switch_to(struct task_struct *,struct task_struct *);
+
+
+////////////////////////////////////////////////////////
+
+/*
+void give_space_to_process(int pid,struct mm_struct *mm_p){
+	struct vma * vma_list=&vma_free_list[0];
+	struct vma * vma_list_par=&vma_free_list[0];
+
+
+	mm_p->pid=pid;
+//	printk("Process id [%d]",mm_p->pid );
+
+	while(vma_list->next!=NULL){
+		vma_list_par=vma_list;
+		vma_list=vma_list->next;
+	}
+
+	mm_p->vma_list=vma_list;
+
+	struct vma * tmp=vma_used_list;
+	vma_used_list=vma_list;
+	vma_list_par->next=vma_list->next;
+	vma_list->next=tmp;
+}
+
+*/
+
+
+void start(uint32_t* modulep, void* physbase, void* physfree){
+	
+	struct smap_t {
+		uint64_t base, length;
+		uint32_t type;
+	}__attribute__((packed)) *smap;
+
+// setting of key board and timer
+int i;
+	asm volatile("cli");        	
+	PIC_remap(0x20, 0x29);
+for(i=0;i<16;i++)
+	IRQ_set_mask(i) ;
+IRQ_clear_mask(0);///this is for timer
+IRQ_clear_mask(1);// this is for keyboard
+	isr_create();
+	reload_idt();
+       asm volatile("sti");        
+       clear_screen();
+
+//
+
+
+	while(modulep[0] != 0x9001) modulep += modulep[1]+2;
+
+	init_freelist(physbase, physfree);
+	physfree = kernelfree;
+	clear_screen();
+
+	for(smap = (struct smap_t*)(modulep+2); smap < (struct smap_t*)((char*)modulep+modulep[1]+2*4); ++smap) {
+		if (smap->type == 1 /* memory */ && smap->length != 0) {
+		//	printk("Available Physical Memory [%x-%x]\n\n", smap->base, smap->base + smap->length);
+			set_kernel_in_freelist(smap->base, smap->base + smap->length);
+		}
+	}
+
+	// kernel starts here
+
+	uint64_t *pml4 = setup_page_tables((uint64_t)physbase, (uint64_t)physfree);
+       printk("pml4 phys addr: %x\n", pml4);
+
+/* ########################### FILE SYSTEM ######################################## */
+       void* phy_addr = (void *)0xfebc0000;
+       pages_for_ahci_start=(uint64_t *)phy_addr;
+       ahci_virt_addr1 = get_user_virt_addr(phy_addr);
+       ahci_virt_addr2 = get_user_virt_addr((phy_addr+(4*1024)));
+   
+//allocatting memory
+//uint64_t virt_addr = (uint64_t)kmalloc_page();
+//printk("Shashank the virtual address is [%x] value [%x]", virt_addr, *(uint64_t*)virt_addr);
+//
+    
+       //printk("\nShashank 1222222");
+pci_init();
+       //printk("\nShashank 1");
+while(1);
+/* ################################################################################# */
+
+
+/* ############################ SYSCALL ###########################################  */
+//syscall_create();
+ //printk("\n syscall :: [%x]",__syscall_prototype(0x1,0x2,0x3,0x4,0x5,0x6));
+ //printf("\n////\n from user space [%d]",90);
+// printf("\n////\n from user space [%d] [%s] [%x] [%c] [%p]",10,"shashank rocks",0xfe2,'A',&virt_addr);
+
+/* ################################################################################ */
+       
+/* ################################ TARFS ################################################# */
+
+//loading of tarfs files
+//printk(" start and end address %x %x",&_binary_tarfs_start,&_binary_tarfs_end);
+//struct posix_header_ustar* header =  (struct posix_header_ustar*)get_elf_file(&_binary_tarfs_start);
+//print_posix_header(header);
+// done loading of tarfs files
+
+//tarfs_table_initialise(&_binary_tarfs_start);
+//print_file_table(tarfs_table);
+/* ################################################################################# */
+
+/* ################################ CONTEXT SWITCHING ################################################# */
+//tsk switch
+//set_up_task_struct();
+//printk("Roshan behen ka lund");
+// done task switch
+
+// loading cr3 for process 1
+
+//uint64_t *user_pml4 = setup_user_page_tables((uint64_t)physbase, (uint64_t)physfree);
+//printk("User pml4 phys addr: %x\n", user_pml4);
+//setup_user_paging();
+/* ################################################################################# */
+
+while(1);
+}
+
+#define INITIAL_STACK_SIZE 4096
+char stack[INITIAL_STACK_SIZE];
+uint32_t* loader_stack;
+extern char kernmem, physbase;
+
+
+void boot(void)
+{
+	// note: function changes rsp, local stack variables can't be practically used
+	register char *temp1, *temp2;
+	__asm__(
+			"movq %%rsp, %0;"
+			"movq %1, %%rsp;"
+			:"=g"(loader_stack)
+			:"r"(&stack[INITIAL_STACK_SIZE])
+	       );
+	reload_gdt();
+	setup_tss();
+	start(
+			(uint32_t*)((char*)(uint64_t)loader_stack[3] + (uint64_t)&kernmem - (uint64_t)&physbase),
+			&physbase,
+			(void*)(uint64_t)loader_stack[4]
+	     );
+	for(
+			temp1 = "!!!!! start() returned !!!!!", temp2 = (char*)0xb8000;
+			*temp1;
+			temp1 += 1, temp2 += 2
+	   ) *temp2 = *temp1;
+	while(1);
+}
